@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Timeline Navigator
 // @namespace    https://github.com/bwb/chatgpt-timeline
-// @version      0.4.4
+// @version      0.4.5
 // @description  Adds a right-side timeline for navigating long ChatGPT conversations
 // @author       bwb
 // @match        https://chatgpt.com/*
@@ -117,10 +117,16 @@
 
     // Reuse a single canvas context for measurement
     if (!smartTruncate._ctx) {
-      smartTruncate._ctx = document.createElement('canvas').getContext('2d');
+      const canvas = document.createElement('canvas');
+      smartTruncate._ctx = canvas.getContext('2d') || null;
+      if (smartTruncate._ctx) smartTruncate._ctx.font = '13px sans-serif';
     }
     const ctx = smartTruncate._ctx;
-    ctx.font = '13px sans-serif';
+    if (!ctx) {
+      // Canvas unavailable (privacy-hardened browser) — fall back to char count
+      const MAX_CHARS = 30;
+      return text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) + SUFFIX : text;
+    }
 
     // Text fits — return as-is
     if (ctx.measureText(text).width <= MAX_PX) return text;
@@ -133,6 +139,8 @@
         const candidate = text.slice(0, i + 1) + SUFFIX;
         if (ctx.measureText(candidate).width <= MAX_PX) {
           bestBreak = i + 1;
+        } else if (bestBreak >= 0) {
+          break;
         }
       }
     }
@@ -149,13 +157,13 @@
   function getMessagePreview(el, index) {
     const textEl = el.querySelector('.whitespace-pre-wrap');
     const text = textEl ? textEl.textContent.trim().replace(/\s+/g, ' ') : '';
-    const fileBtn = el.querySelector('button[aria-label]');
+    const fileBtn = el.querySelector('button[class*="interactive-bg-secondary"][aria-label]');
     const hasImage = !!el.querySelector('[class*="message-image"]');
 
-    if (text && fileBtn)  return smartTruncate('📎| ' + text);
-    if (text && hasImage) return smartTruncate('🖼| ' + text);
+    if (text && fileBtn)  return '📎| ' + smartTruncate(text);
+    if (text && hasImage) return '🖼| ' + smartTruncate(text);
     if (text)             return smartTruncate(text);
-    if (fileBtn)          return smartTruncate('📎 ' + fileBtn.getAttribute('aria-label'));
+    if (fileBtn)          return '📎 ' + smartTruncate(fileBtn.getAttribute('aria-label'));
     if (hasImage)         return '🖼';
     return `#${index + 1}`;
   }
