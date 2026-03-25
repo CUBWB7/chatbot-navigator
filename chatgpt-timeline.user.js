@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Timeline Navigator
 // @namespace    https://github.com/bwb/chatgpt-timeline
-// @version      0.4.3
+// @version      0.4.4
 // @description  Adds a right-side timeline for navigating long ChatGPT conversations
 // @author       bwb
 // @match        https://chatgpt.com/*
@@ -150,10 +150,13 @@
     const textEl = el.querySelector('.whitespace-pre-wrap');
     const text = textEl ? textEl.textContent.trim().replace(/\s+/g, ' ') : '';
     const fileBtn = el.querySelector('button[aria-label]');
+    const hasImage = !!el.querySelector('[class*="message-image"]');
 
-    if (text && fileBtn) return smartTruncate('📎| ' + text);
-    if (text)            return smartTruncate(text);
-    if (fileBtn)         return smartTruncate('📎 ' + fileBtn.getAttribute('aria-label'));
+    if (text && fileBtn)  return smartTruncate('📎| ' + text);
+    if (text && hasImage) return smartTruncate('🖼| ' + text);
+    if (text)             return smartTruncate(text);
+    if (fileBtn)          return smartTruncate('📎 ' + fileBtn.getAttribute('aria-label'));
+    if (hasImage)         return '🖼';
     return `#${index + 1}`;
   }
 
