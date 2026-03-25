@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Timeline Navigator
 // @namespace    https://github.com/bwb/chatgpt-timeline
-// @version      0.3.0
+// @version      0.4.3
 // @description  Adds a right-side timeline for navigating long ChatGPT conversations
 // @author       bwb
 // @match        https://chatgpt.com/*
@@ -51,13 +51,13 @@
       overflow: hidden;
       text-overflow: ellipsis;
       text-align: right;
-      width: 0;
+      max-width: 0;
       opacity: 0;
-      transition: width 150ms ease-out, opacity 150ms ease-out;
+      transition: max-width 150ms ease-out, opacity 150ms ease-out;
     }
 
     #cgpt-timeline:hover .cgpt-tl-label {
-      width: 240px;
+      max-width: 220px;
       opacity: 1;
     }
 
@@ -111,9 +111,50 @@
     return window;
   }
 
-  function getMessagePreview(el) {
-    const text = el.textContent.trim().replace(/\s+/g, ' ');
-    return text.length > 20 ? text.slice(0, 20) + '…' : text;
+  function smartTruncate(text) {
+    const MAX_PX = 220;
+    const SUFFIX = '…';
+
+    // Reuse a single canvas context for measurement
+    if (!smartTruncate._ctx) {
+      smartTruncate._ctx = document.createElement('canvas').getContext('2d');
+    }
+    const ctx = smartTruncate._ctx;
+    ctx.font = '13px sans-serif';
+
+    // Text fits — return as-is
+    if (ctx.measureText(text).width <= MAX_PX) return text;
+
+    // Find the last punctuation break that still fits within MAX_PX
+    const puncts = /[？，：。,.?:]/;
+    let bestBreak = -1;
+    for (let i = 0; i < text.length; i++) {
+      if (puncts.test(text[i])) {
+        const candidate = text.slice(0, i + 1) + SUFFIX;
+        if (ctx.measureText(candidate).width <= MAX_PX) {
+          bestBreak = i + 1;
+        }
+      }
+    }
+    if (bestBreak > 0) return text.slice(0, bestBreak) + SUFFIX;
+
+    // No punctuation — hard-truncate at pixel boundary
+    let end = text.length;
+    while (end > 0 && ctx.measureText(text.slice(0, end) + SUFFIX).width > MAX_PX) {
+      end--;
+    }
+    return (end > 0 ? text.slice(0, end) : '') + SUFFIX;
+  }
+
+  function getMessagePreview(el, index) {
+    const textEl = el.querySelector('.whitespace-pre-wrap');
+    const text = textEl ? textEl.textContent.trim().replace(/\s+/g, ' ') : '';
+    const fileBtn = el.querySelector('button[aria-label]');
+
+    if (text && fileBtn) return smartTruncate('📎| ' + text);
+    if (text)            return smartTruncate(text);
+    if (fileBtn)         return smartTruncate('📎 ' + fileBtn.getAttribute('aria-label'));
+    return `#${index + 1}`;
   }
 
   function isConversationPage() {
@@ -186,7 +227,7 @@
       this.nodes = messages.map((el, i) => ({
         id: i,
         element: el,
-        preview: getMessagePreview(el),
+        preview: getMessagePreview(el, i),
       }));
     }
 
