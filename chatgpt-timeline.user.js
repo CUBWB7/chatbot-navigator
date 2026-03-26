@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Timeline Navigator
 // @namespace    https://github.com/bwb/chatgpt-timeline
-// @version      0.5.3
+// @version      0.6.0
 // @description  Adds a right-side timeline for navigating long ChatGPT conversations
 // @author       bwb
 // @match        https://chatgpt.com/*
@@ -267,6 +267,46 @@
     },
   };
 
+  const GeminiAdapter = {
+    name: 'Gemini',
+    settingKey: 'enabled_gemini',
+    defaultEnabled: false,
+    waitSelector: '.user-query-bubble-with-background',
+
+    matchUrl() {
+      return location.hostname === 'gemini.google.com';
+    },
+
+    isConversationPage() {
+      return /^\/app\//.test(location.pathname);
+    },
+
+    findUserMessages() {
+      return Array.from(document.querySelectorAll('user-query'));
+    },
+
+    findScrollContainer(el) {
+      const chatHistory = document.querySelector('#chat-history');
+      if (chatHistory) return chatHistory;
+      return findScrollContainer(el);
+    },
+
+    getMessagePreview(el, index) {
+      const textLines = Array.from(el.querySelectorAll('p.query-text-line'));
+      const text = textLines.map(p => p.textContent.trim()).join(' ').replace(/\s+/g, ' ').trim();
+      const hasFile = !!el.querySelector('[data-test-id="uploaded-file"]');
+      const hasImage = !!el.querySelector('img[data-test-id="uploaded-img"]');
+      const fileBtn = el.querySelector('button.new-file-preview-file[aria-label]');
+
+      if (text && hasFile)           return '📎| ' + smartTruncate(text);
+      if (text && hasImage)          return '🖼| ' + smartTruncate(text);
+      if (text)                      return smartTruncate(text);
+      if (hasFile && fileBtn)        return '📎 ' + smartTruncate(fileBtn.getAttribute('aria-label'));
+      if (hasImage)                  return '🖼';
+      return `#${index + 1}`;
+    },
+  };
+
   // ─── Region 5: TimelineManager ────────────────────────────────────────────
 
   const MAX_NODES = 200;
@@ -465,7 +505,7 @@
 
   // ─── Region 6: Platform Settings ─────────────────────────────────────────
 
-  const ADAPTERS = [ChatGPTAdapter, ClaudeAdapter];
+  const ADAPTERS = [ChatGPTAdapter, ClaudeAdapter, GeminiAdapter];
 
   function getActiveAdapter() {
     for (const adapter of ADAPTERS) {
@@ -473,8 +513,6 @@
     }
     return null;
   }
-
-  const GeminiMenuEntry = { name: 'Gemini', settingKey: 'enabled_gemini', defaultEnabled: false };
 
   function isPlatformEnabled(adapter) {
     return GM_getValue(adapter.settingKey, adapter.defaultEnabled);
@@ -490,7 +528,7 @@
     }
     _menuCommandIds = [];
 
-    for (const platform of [...ADAPTERS, GeminiMenuEntry]) {
+    for (const platform of ADAPTERS) {
       const enabled = GM_getValue(platform.settingKey, platform.defaultEnabled);
       const label = (enabled ? '✅' : '❌') + ' ' + platform.name;
 
