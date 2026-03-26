@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Timeline Navigator
 // @namespace    https://github.com/bwb/chatgpt-timeline
-// @version      0.5.2
+// @version      0.5.3
 // @description  Adds a right-side timeline for navigating long ChatGPT conversations
 // @author       bwb
 // @match        https://chatgpt.com/*
@@ -10,6 +10,7 @@
 // @match        *://gemini.google.com/*
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @run-at       document-idle
@@ -479,17 +480,26 @@
     return GM_getValue(adapter.settingKey, adapter.defaultEnabled);
   }
 
+  let _menuCommandIds = [];
+
   function registerMenuCommands() {
+    // Unregister previous entries before adding new ones, otherwise each call
+    // appends new items instead of replacing existing ones.
+    for (const id of _menuCommandIds) {
+      GM_unregisterMenuCommand(id);
+    }
+    _menuCommandIds = [];
+
     for (const platform of [...ADAPTERS, GeminiMenuEntry]) {
       const enabled = GM_getValue(platform.settingKey, platform.defaultEnabled);
       const label = (enabled ? '✅' : '❌') + ' ' + platform.name;
 
-      GM_registerMenuCommand(label, () => {
+      const id = GM_registerMenuCommand(label, () => {
         GM_setValue(platform.settingKey, !GM_getValue(platform.settingKey, platform.defaultEnabled));
-        // Re-register menu to update checkmarks, then re-apply timeline
         registerMenuCommands();
         startTimeline();
       });
+      _menuCommandIds.push(id);
     }
   }
 
