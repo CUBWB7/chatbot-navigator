@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Timeline Navigator
 // @namespace    https://github.com/bwb/chatgpt-timeline
-// @version      0.5.1
+// @version      0.5.2
 // @description  Adds a right-side timeline for navigating long ChatGPT conversations
 // @author       bwb
 // @match        https://chatgpt.com/*
@@ -230,14 +230,16 @@
     findUserMessages() {
       const inners = Array.from(document.querySelectorAll('[data-testid="user-message"]'));
       return inners.map(inner => {
-        // Walk up to find the nearest .group ancestor for scroll/rect operations
+        // Walk all the way up to find the outermost .group ancestor.
+        // The inner message bubble also has .group, so we must not stop at the first one —
+        // the outermost .group is the message-level container that also holds thumbnails.
         let node = inner.parentElement;
+        let outerGroup = null;
         while (node && node !== document.body) {
-          if (node.classList.contains('group')) return node;
+          if (node.classList.contains('group')) outerGroup = node;
           node = node.parentElement;
         }
-        // Fall back to inner element if no .group ancestor found
-        return inner;
+        return outerGroup || inner;
       });
     },
 
