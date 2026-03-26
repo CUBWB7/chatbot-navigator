@@ -1,12 +1,17 @@
 // ==UserScript==
 // @name         ChatGPT Timeline Navigator
 // @namespace    https://github.com/bwb/chatgpt-timeline
-// @version      0.4.5
+// @version      0.5.0
 // @description  Adds a right-side timeline for navigating long ChatGPT conversations
 // @author       bwb
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*
+// @match        *://claude.ai/*
+// @match        *://gemini.google.com/*
 // @grant        GM_addStyle
+// @grant        GM_registerMenuCommand
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -79,26 +84,7 @@
     }
   `);
 
-  // ─── Region 3: DOM Utility Functions ──────────────────────────────────────
-
-  function findUserMessages() {
-    const selectors = [
-      '[data-message-author-role="user"]',
-      '[data-testid^="conversation-turn-"][data-testid*="user"]',
-      '.group\\/conversation-turn:has([data-message-author-role="user"])',
-    ];
-
-    for (const sel of selectors) {
-      try {
-        const els = Array.from(document.querySelectorAll(sel));
-        if (els.length > 0) return els;
-      } catch (_) {
-        // selector not supported, try next
-      }
-    }
-
-    return [];
-  }
+  // ─── Region 3: Shared Utility Functions ───────────────────────────────────
 
   function findScrollContainer(el) {
     let node = el.parentElement;
@@ -115,7 +101,6 @@
     const MAX_PX = 220;
     const SUFFIX = '…';
 
-    // Reuse a single canvas context for measurement
     if (!smartTruncate._ctx) {
       const canvas = document.createElement('canvas');
       smartTruncate._ctx = canvas.getContext('2d') || null;
@@ -123,15 +108,12 @@
     }
     const ctx = smartTruncate._ctx;
     if (!ctx) {
-      // Canvas unavailable (privacy-hardened browser) — fall back to char count
       const MAX_CHARS = 30;
       return text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) + SUFFIX : text;
     }
 
-    // Text fits — return as-is
     if (ctx.measureText(text).width <= MAX_PX) return text;
 
-    // Find the last punctuation break that still fits within MAX_PX
     const puncts = /[？，：。,.?:]/;
     let bestBreak = -1;
     for (let i = 0; i < text.length; i++) {
@@ -146,30 +128,11 @@
     }
     if (bestBreak > 0) return text.slice(0, bestBreak) + SUFFIX;
 
-    // No punctuation — hard-truncate at pixel boundary
     let end = text.length;
     while (end > 0 && ctx.measureText(text.slice(0, end) + SUFFIX).width > MAX_PX) {
       end--;
     }
     return (end > 0 ? text.slice(0, end) : '') + SUFFIX;
-  }
-
-  function getMessagePreview(el, index) {
-    const textEl = el.querySelector('.whitespace-pre-wrap');
-    const text = textEl ? textEl.textContent.trim().replace(/\s+/g, ' ') : '';
-    const fileBtn = el.querySelector('button[class*="interactive-bg-secondary"][aria-label]');
-    const hasImage = !!el.querySelector('[class*="message-image"]');
-
-    if (text && fileBtn)  return '📎| ' + smartTruncate(text);
-    if (text && hasImage) return '🖼| ' + smartTruncate(text);
-    if (text)             return smartTruncate(text);
-    if (fileBtn)          return '📎 ' + smartTruncate(fileBtn.getAttribute('aria-label'));
-    if (hasImage)         return '🖼';
-    return `#${index + 1}`;
-  }
-
-  function isConversationPage() {
-    return /\/c\//.test(location.pathname);
   }
 
   function waitForElement(selector, timeout = 5000) {
@@ -195,12 +158,115 @@
     });
   }
 
-  // ─── Region 4: TimelineManager ────────────────────────────────────────────
+  // ─── Region 4: Platform Adapters ─────────────────────────────────────────
+
+  const ChatGPTAdapter = {
+    name: 'ChatGPT',
+    waitSelector: '[data-message-author-role="user"]',
+
+    matchUrl() {
+      const h = location.hostname;
+      return h === 'chatgpt.com' || h === 'chat.openai.com';
+    },
+
+    isConversationPage() {
+      return /\/c\//.test(location.pathname);
+    },
+
+    findUserMessages() {
+      const selectors = [
+        '[data-message-author-role="user"]',
+        '[data-testid^="conversation-turn-"][data-testid*="user"]',
+        '.group\\/conversation-turn:has([data-message-author-role="user"])',
+      ];
+
+      for (const sel of selectors) {
+        try {
+          const els = Array.from(document.querySelectorAll(sel));
+          if (els.length > 0) return els;
+        } catch (_) {
+          // selector not supported, try next
+        }
+      }
+
+      return [];
+    },
+
+    findScrollContainer(el) {
+      return findScrollContainer(el);
+    },
+
+    getMessagePreview(el, index) {
+      const textEl = el.querySelector('.whitespace-pre-wrap');
+      const text = textEl ? textEl.textContent.trim().replace(/\s+/g, ' ') : '';
+      const fileBtn = el.querySelector('button[class*="interactive-bg-secondary"][aria-label]');
+      const hasImage = !!el.querySelector('[class*="message-image"]');
+
+      if (text && fileBtn)  return '📎| ' + smartTruncate(text);
+      if (text && hasImage) return '🖼| ' + smartTruncate(text);
+      if (text)             return smartTruncate(text);
+      if (fileBtn)          return '📎 ' + smartTruncate(fileBtn.getAttribute('aria-label'));
+      if (hasImage)         return '🖼';
+      return `#${index + 1}`;
+    },
+  };
+
+  const ClaudeAdapter = {
+    name: 'Claude',
+    waitSelector: '[data-testid="user-message"]',
+
+    matchUrl() {
+      return location.hostname === 'claude.ai';
+    },
+
+    isConversationPage() {
+      return /\/chat\//.test(location.pathname);
+    },
+
+    findUserMessages() {
+      const inners = Array.from(document.querySelectorAll('[data-testid="user-message"]'));
+      return inners.map(inner => {
+        // Walk up to find the nearest .group ancestor for scroll/rect operations
+        let node = inner.parentElement;
+        while (node && node !== document.body) {
+          if (node.classList.contains('group')) return node;
+          node = node.parentElement;
+        }
+        // Fall back to inner element if no .group ancestor found
+        return inner;
+      });
+    },
+
+    findScrollContainer(el) {
+      return findScrollContainer(el);
+    },
+
+    getMessagePreview(el, index) {
+      const textEl = el.querySelector('[data-testid="user-message"] p.whitespace-pre-wrap');
+      const text = textEl ? textEl.textContent.trim().replace(/\s+/g, ' ') : '';
+      const fileThumbnail = el.querySelector('[data-testid="file-thumbnail"]');
+      const fileBtn = fileThumbnail
+        ? fileThumbnail.querySelector('button[aria-label]')
+        : null;
+      // .group/thumbnail must be escaped as .group\/thumbnail in querySelector
+      const hasImage = !!el.querySelector('.group\\/thumbnail:not([data-testid="file-thumbnail"]) img');
+
+      if (text && fileBtn)  return '📎| ' + smartTruncate(text);
+      if (text && hasImage) return '🖼| ' + smartTruncate(text);
+      if (text)             return smartTruncate(text);
+      if (fileBtn)          return '📎 ' + smartTruncate(fileBtn.getAttribute('aria-label'));
+      if (hasImage)         return '🖼';
+      return `#${index + 1}`;
+    },
+  };
+
+  // ─── Region 5: TimelineManager ────────────────────────────────────────────
 
   const MAX_NODES = 200;
 
   class TimelineManager {
-    constructor() {
+    constructor(adapter) {
+      this.adapter = adapter;
       this.container = null;
       this.nodes = [];
       this.activeNodeIndex = -1;
@@ -215,17 +281,17 @@
     }
 
     init() {
-      let messages = findUserMessages();
+      let messages = this.adapter.findUserMessages();
       if (messages.length === 0) {
-        console.warn('[ChatGPT Timeline] No user messages found. Selector may need updating.');
+        console.warn(`[Timeline] No user messages found on ${this.adapter.name}. Selector may need updating.`);
         return;
       }
       if (messages.length > MAX_NODES) {
-        console.warn(`[ChatGPT Timeline] ${messages.length} messages found, showing first ${MAX_NODES}.`);
+        console.warn(`[Timeline] ${messages.length} messages found, showing first ${MAX_NODES}.`);
         messages = messages.slice(0, MAX_NODES);
       }
 
-      this.scrollContainer = findScrollContainer(messages[0]);
+      this.scrollContainer = this.adapter.findScrollContainer(messages[0]);
       this.buildNodes(messages);
       this.createUI();
       this.setupScrollListener();
@@ -238,7 +304,7 @@
       this.nodes = messages.map((el, i) => ({
         id: i,
         element: el,
-        preview: getMessagePreview(el, i),
+        preview: this.adapter.getMessagePreview(el, i),
       }));
     }
 
@@ -334,7 +400,7 @@
       this._mutationObserver = new MutationObserver(() => {
         clearTimeout(this._debounceTimer);
         this._debounceTimer = setTimeout(() => {
-          const messages = findUserMessages();
+          const messages = this.adapter.findUserMessages();
           if (messages.length !== this.nodes.length) {
             this.buildNodes(messages.slice(0, MAX_NODES));
             this.createUI();
@@ -390,7 +456,45 @@
     }
   }
 
-  // ─── Region 5: Entry Point + SPA Routing ─────────────────────────────────
+  // ─── Region 6: Platform Settings ─────────────────────────────────────────
+
+  const ADAPTERS = [ChatGPTAdapter, ClaudeAdapter];
+
+  function getActiveAdapter() {
+    for (const adapter of ADAPTERS) {
+      if (adapter.matchUrl()) return adapter;
+    }
+    return null;
+  }
+
+  function isPlatformEnabled(adapter) {
+    const key = 'enabled_' + adapter.name.toLowerCase();
+    // Gemini defaults to false; all others default to true
+    const defaultValue = adapter.name !== 'Gemini';
+    return GM_getValue(key, defaultValue);
+  }
+
+  function registerMenuCommands() {
+    const platforms = [
+      { name: 'ChatGPT', key: 'enabled_chatgpt', defaultValue: true },
+      { name: 'Claude',  key: 'enabled_claude',  defaultValue: true },
+      { name: 'Gemini',  key: 'enabled_gemini',  defaultValue: false },
+    ];
+
+    for (const platform of platforms) {
+      const enabled = GM_getValue(platform.key, platform.defaultValue);
+      const label = (enabled ? '✅' : '❌') + ' ' + platform.name;
+
+      GM_registerMenuCommand(label, () => {
+        GM_setValue(platform.key, !enabled);
+        // Re-register menu to update checkmarks, then re-apply timeline
+        registerMenuCommands();
+        startTimeline();
+      });
+    }
+  }
+
+  // ─── Region 7: Entry Point + SPA Routing ─────────────────────────────────
 
   let manager = null;
   let startToken = 0;
@@ -398,17 +502,20 @@
   function startTimeline() {
     if (manager) { manager.destroy(); manager = null; }
 
-    if (!isConversationPage()) return;
+    const adapter = getActiveAdapter();
+    if (!adapter) return;
+    if (!adapter.isConversationPage()) return;
+    if (!isPlatformEnabled(adapter)) return;
 
     const token = ++startToken;
-    waitForElement('[data-message-author-role="user"]', 8000)
+    waitForElement(adapter.waitSelector, 8000)
       .then(() => {
         if (token !== startToken) return;
-        manager = new TimelineManager();
+        manager = new TimelineManager(adapter);
         manager.init();
       })
       .catch(() => {
-        console.warn('[ChatGPT Timeline] Timed out waiting for user messages.');
+        console.warn(`[Timeline] Timed out waiting for messages on ${adapter.name}.`);
       });
   }
 
@@ -436,5 +543,6 @@
     }
   }, 1000);
 
+  registerMenuCommands();
   startTimeline();
 })();
