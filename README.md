@@ -100,6 +100,6 @@
 
 ## 更强大的相关项目
 
-- [gemini-voyager](https://github.com/nicq000/gemini-voyager)
+- [gemini-voyager](https://github.com/Nagi-ovo/gemini-voyager)
 - [chatgpt-conversation-timeline](https://github.com/Reborn14/chatgpt-conversation-timeline)
 - [claude-nexus](https://github.com/Qiuner/claude-nexus)
