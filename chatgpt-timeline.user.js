@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         Chatbot Navigator
-// @name:zh-CN   Chatbot Navigator - AI对话时间轴导航
+// @name         Chatbot Navigator - AI对话时间轴导航
+// @name:en      Chatbot Navigator
 // @namespace    https://github.com/CUBWB7/chatbot-navigator
 // @version      0.6.1
-// @description  Adds a right-side timeline bar for navigating long conversations on ChatGPT / Claude / Gemini
-// @description:zh-CN  为 ChatGPT / Claude / Gemini 添加右侧时间轴导航条，快速跳转长对话中的任意消息
+// @description  为 ChatGPT / Claude / Gemini 添加右侧时间轴导航条，快速跳转长对话中的任意消息
+// @description:en  Adds a right-side timeline bar for navigating long conversations on ChatGPT / Claude / Gemini
 // @author       BiBaBo7
 // @license      MIT
 // @match        https://chatgpt.com/*
