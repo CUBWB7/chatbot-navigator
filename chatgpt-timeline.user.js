@@ -1,9 +1,12 @@
 // ==UserScript==
-// @name         ChatGPT Timeline Navigator
-// @namespace    https://github.com/bwb/chatgpt-timeline
-// @version      0.6.0
-// @description  Adds a right-side timeline for navigating long ChatGPT conversations
-// @author       bwb
+// @name         Chatbot Navigator
+// @name:zh-CN   Chatbot Navigator - AI对话时间轴导航
+// @namespace    https://github.com/CUBWB7/chatbot-navigator
+// @version      0.6.1
+// @description  Adds a right-side timeline bar for navigating long conversations on ChatGPT / Claude / Gemini
+// @description:zh-CN  为 ChatGPT / Claude / Gemini 添加右侧时间轴导航条，快速跳转长对话中的任意消息
+// @author       BiBaBo7
+// @license      MIT
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*
 // @match        *://claude.ai/*
@@ -83,6 +86,11 @@
 
     .cgpt-tl-node:hover .cgpt-tl-block {
       background: #888;
+    }
+
+    #cgpt-timeline.cgpt-tl-expanded .cgpt-tl-label {
+      max-width: 220px;
+      opacity: 1;
     }
   `);
 
@@ -271,7 +279,7 @@
   const GeminiAdapter = {
     name: 'Gemini',
     settingKey: 'enabled_gemini',
-    defaultEnabled: false,
+    defaultEnabled: true,
     waitSelector: '.user-query-bubble-with-background',
 
     matchUrl() {
@@ -385,6 +393,11 @@
 
       document.body.appendChild(container);
       this.container = container;
+
+      if (GM_getValue('keep_expanded', false)) {
+        container.classList.add('cgpt-tl-expanded');
+      }
+
       this.renderTimeline();
     }
 
@@ -540,6 +553,21 @@
       });
       _menuCommandIds.push(id);
     }
+
+    // "Keep Expanded" toggle
+    const expanded = GM_getValue('keep_expanded', false);
+    const expandLabel = (expanded ? '✅' : '❌') + ' Keep Expanded';
+    const expandId = GM_registerMenuCommand(expandLabel, () => {
+      GM_setValue('keep_expanded', !GM_getValue('keep_expanded', false));
+      registerMenuCommands();
+      // Toggle class directly if timeline exists, avoid full rebuild
+      if (manager && manager.container) {
+        manager.container.classList.toggle('cgpt-tl-expanded');
+      } else {
+        startTimeline();
+      }
+    });
+    _menuCommandIds.push(expandId);
   }
 
   // ─── Region 7: Entry Point + SPA Routing ─────────────────────────────────
