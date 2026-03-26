@@ -62,7 +62,7 @@
 
 > Tampermonkey 图标 → 脚本菜单 → 点击对应选项切换 ✅ / ❌
 
-![alt text](pics/tampermonkey.png)
+<img src="pics/tampermonkey.png" alt="Tampermonkey 菜单" width="180">
 
 设置会自动保存，刷新页面后生效。
 

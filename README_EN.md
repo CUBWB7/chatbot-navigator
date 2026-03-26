@@ -62,7 +62,7 @@ Toggle each platform and the "Keep Expanded" option via the Tampermonkey extensi
 
 > Tampermonkey icon → Script menu → Click an option to toggle ✅ / ❌
 
-![Tampermonkey Menu](pics/tampermonkey.png)
+<img src="pics/tampermonkey.png" alt="Tampermonkey Menu" width="180">
 
 Settings are saved automatically and take effect after page refresh.
 
