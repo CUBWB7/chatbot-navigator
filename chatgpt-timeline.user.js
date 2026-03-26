@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Timeline Navigator
 // @namespace    https://github.com/bwb/chatgpt-timeline
-// @version      0.5.0
+// @version      0.5.1
 // @description  Adds a right-side timeline for navigating long ChatGPT conversations
 // @author       bwb
 // @match        https://chatgpt.com/*
@@ -162,6 +162,8 @@
 
   const ChatGPTAdapter = {
     name: 'ChatGPT',
+    settingKey: 'enabled_chatgpt',
+    defaultEnabled: true,
     waitSelector: '[data-message-author-role="user"]',
 
     matchUrl() {
@@ -213,6 +215,8 @@
 
   const ClaudeAdapter = {
     name: 'Claude',
+    settingKey: 'enabled_claude',
+    defaultEnabled: true,
     waitSelector: '[data-testid="user-message"]',
 
     matchUrl() {
@@ -467,26 +471,19 @@
     return null;
   }
 
+  const GeminiMenuEntry = { name: 'Gemini', settingKey: 'enabled_gemini', defaultEnabled: false };
+
   function isPlatformEnabled(adapter) {
-    const key = 'enabled_' + adapter.name.toLowerCase();
-    // Gemini defaults to false; all others default to true
-    const defaultValue = adapter.name !== 'Gemini';
-    return GM_getValue(key, defaultValue);
+    return GM_getValue(adapter.settingKey, adapter.defaultEnabled);
   }
 
   function registerMenuCommands() {
-    const platforms = [
-      { name: 'ChatGPT', key: 'enabled_chatgpt', defaultValue: true },
-      { name: 'Claude',  key: 'enabled_claude',  defaultValue: true },
-      { name: 'Gemini',  key: 'enabled_gemini',  defaultValue: false },
-    ];
-
-    for (const platform of platforms) {
-      const enabled = GM_getValue(platform.key, platform.defaultValue);
+    for (const platform of [...ADAPTERS, GeminiMenuEntry]) {
+      const enabled = GM_getValue(platform.settingKey, platform.defaultEnabled);
       const label = (enabled ? '✅' : '❌') + ' ' + platform.name;
 
       GM_registerMenuCommand(label, () => {
-        GM_setValue(platform.key, !enabled);
+        GM_setValue(platform.settingKey, !GM_getValue(platform.settingKey, platform.defaultEnabled));
         // Re-register menu to update checkmarks, then re-apply timeline
         registerMenuCommands();
         startTimeline();
