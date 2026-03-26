@@ -13,6 +13,7 @@
 // @grant        GM_unregisterMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @noframes
 // @run-at       document-idle
 // ==/UserScript==
 
